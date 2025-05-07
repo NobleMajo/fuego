@@ -7,10 +7,11 @@ In return, we will do our best to make the contribution process as easy and
 transparent as possible.
 
 ## How to contribute
-
-There are many ways to contribute, from writing tutorials or blog posts,
-improving the documentation, submitting bug reports and feature requests
-or writing code which can be incorporated into the project itself.
+You can contribute to Fuego in several ways:
+- Writing tutorials or blog posts
+- Improving the documentation
+- Submitting bug reports and feature requests
+- Writing code which can be incorporated into the project itself.
 
 ## Installation
 
@@ -20,7 +21,7 @@ or writing code which can be incorporated into the project itself.
 4. Coding time!
 5. Run `make ci` to **run all the tests**, coverage and check the code style
 6. If everything is fine, **commit** your changes and push them to your fork
-7. Open a **pull request**!
+7. Open a **pull request** to the `main` branch!
 
 ## Contributors
 
