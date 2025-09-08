@@ -10,7 +10,11 @@ import (
 	"path/filepath"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3gen"
 )
+
+// An EngineOption represents configures the behavior of an [Engine].
+type EngineOption = func(*Engine)
 
 // NewEngine creates a new Engine with the given options.
 // For example:
@@ -24,10 +28,11 @@ import (
 //	)
 //
 // Options all begin with `With`.
-func NewEngine(options ...func(*Engine)) *Engine {
+func NewEngine(options ...EngineOption) *Engine {
 	e := &Engine{
-		OpenAPI:      NewOpenAPI(),
-		ErrorHandler: ErrorHandler,
+		OpenAPI:              NewOpenAPI(),
+		ErrorHandler:         ErrorHandler,
+		responseContentTypes: defaultResponseContentTypes,
 	}
 	for _, option := range options {
 		option(e)
@@ -40,7 +45,8 @@ type Engine struct {
 	OpenAPI      *OpenAPI
 	ErrorHandler func(context.Context, error) error
 
-	requestContentTypes []string
+	requestContentTypes  []string
+	responseContentTypes []string
 }
 
 type OpenAPIConfig struct {
@@ -67,24 +73,40 @@ type OpenAPIConfig struct {
 	DisableSwaggerUI bool
 	// Middleware configuration for the engine
 	MiddlewareConfig MiddlewareConfig
+	// Info [openapi3.Info] config, nil if blank
+	Info *openapi3.Info
 }
 
-var defaultOpenAPIConfig = OpenAPIConfig{
-	JSONFilePath: "doc/openapi.json",
-	SpecURL:      "/swagger/openapi.json",
-	SwaggerURL:   "/swagger",
-	UIHandler:    DefaultOpenAPIHandler,
-	MiddlewareConfig: MiddlewareConfig{
-		DisableMiddlewareSection: false,
-		MaxNumberOfMiddlewares:   6,
-		ShortMiddlewaresPaths:    false,
-	},
-}
+var (
+	defaultOpenAPIConfig = OpenAPIConfig{
+		JSONFilePath: "doc/openapi.json",
+		SpecURL:      "/swagger/openapi.json",
+		SwaggerURL:   "/swagger",
+		UIHandler:    DefaultOpenAPIHandler,
+		MiddlewareConfig: MiddlewareConfig{
+			DisableMiddlewareSection: false,
+			MaxNumberOfMiddlewares:   6,
+			ShortMiddlewaresPaths:    false,
+		},
+		Info: &openapi3.Info{
+			Title:       "OpenAPI",
+			Description: openapiDescription,
+			Version:     "0.0.1",
+		},
+	}
+	defaultResponseContentTypes = []string{"application/json", "application/xml"}
+)
 
 // WithRequestContentType sets the accepted content types for the engine.
 // By default, the accepted content types is */*.
-func WithRequestContentType(consumes ...string) func(*Engine) {
+func WithRequestContentType(consumes ...string) EngineOption {
 	return func(e *Engine) { e.requestContentTypes = consumes }
+}
+
+// WithResponseContentType sets content types of the returned body.
+// By default, the returned content-types' are application/json and application/xml
+func WithResponseContentType(consumes ...string) func(*Engine) {
+	return func(e *Engine) { e.responseContentTypes = consumes }
 }
 
 type MiddlewareConfig struct {
@@ -93,7 +115,7 @@ type MiddlewareConfig struct {
 	ShortMiddlewaresPaths    bool
 }
 
-func WithMiddlewareConfig(cfg MiddlewareConfig) func(*Engine) {
+func WithMiddlewareConfig(cfg MiddlewareConfig) EngineOption {
 	return func(e *Engine) {
 		e.OpenAPI.Config.MiddlewareConfig.DisableMiddlewareSection = cfg.DisableMiddlewareSection
 		e.OpenAPI.Config.MiddlewareConfig.ShortMiddlewaresPaths = cfg.ShortMiddlewaresPaths
@@ -103,7 +125,7 @@ func WithMiddlewareConfig(cfg MiddlewareConfig) func(*Engine) {
 	}
 }
 
-func WithOpenAPIConfig(config OpenAPIConfig) func(*Engine) {
+func WithOpenAPIConfig(config OpenAPIConfig) EngineOption {
 	return func(e *Engine) {
 		if config.JSONFilePath != "" {
 			e.OpenAPI.Config.JSONFilePath = config.JSONFilePath
@@ -116,6 +138,9 @@ func WithOpenAPIConfig(config OpenAPIConfig) func(*Engine) {
 		}
 		if config.UIHandler != nil {
 			e.OpenAPI.Config.UIHandler = config.UIHandler
+		}
+		if config.Info != nil {
+			e.OpenAPI.mergeInfo(config.Info)
 		}
 
 		e.OpenAPI.Config.Disabled = config.Disabled
@@ -138,8 +163,15 @@ func WithOpenAPIConfig(config OpenAPIConfig) func(*Engine) {
 	}
 }
 
+// WithOpenAPIGeneratorConfig sets the options for the generator.
+func WithOpenAPIGeneratorSchemaCustomizer(sc openapi3gen.SchemaCustomizerFn) EngineOption {
+	return func(e *Engine) {
+		e.OpenAPI.SetGeneratorSchemaCustomizer(sc)
+	}
+}
+
 // WithErrorHandler sets a customer error handler for the server
-func WithErrorHandler(errorHandler func(ctx context.Context, err error) error) func(*Engine) {
+func WithErrorHandler(errorHandler func(ctx context.Context, err error) error) EngineOption {
 	return func(e *Engine) {
 		if errorHandler == nil {
 			panic("errorHandler cannot be nil")
@@ -150,7 +182,7 @@ func WithErrorHandler(errorHandler func(ctx context.Context, err error) error) f
 }
 
 // DisableErrorHandler overrides ErrorHandler with a simple pass-through
-func DisableErrorHandler() func(*Engine) {
+func DisableErrorHandler() EngineOption {
 	return func(e *Engine) {
 		e.ErrorHandler = func(_ context.Context, err error) error { return err }
 	}

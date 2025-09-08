@@ -1,5 +1,8 @@
 name: Lint
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -9,14 +12,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: markdownlint-cli
-        uses: nosborn/github-action-markdown-cli@v3.4.0
+        uses: nosborn/github-action-markdown-cli@v3.5.0
         with:
           files: .
           config_file: .markdownlint.yaml
           dot: true
 
       - name: typos-action spellchecker
-        uses: crate-ci/typos@v1.32.0
+        uses: crate-ci/typos@v1.35.5
